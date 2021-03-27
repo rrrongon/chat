@@ -9,10 +9,19 @@
 #include <netdb.h>
 #include <string>
 #include <fstream>
+#include <bits/stdc++.h>
 
 using namespace std;
 
 const unsigned MAXBUFLEN = 512;
+const int LOGIN=1;
+const int LOGOUT=2;
+const int CHAT=3;
+const int NOTHING=4;
+const int Q=5;
+
+int get_command(string);
+string convertToString(char* , int );
 
 int main(int argc, char* argv[]) {
     int sockfd, rv, flag;
@@ -65,16 +74,29 @@ int main(int argc, char* argv[]) {
 	}
 	string oneline;
 
-	/* Does this program have problems? Yes.
- * 	 * The client may be blocked forever after the server crashes or closes
- * 	 	 * the connection. FOREVER: until user types a line. Otherwise, the client 
- * 	 	 	 * program is blocked on getline().
- * 	 	 	 	 */ 		 
+
+ // program is blocked on getline().    
     while (getline(cin, oneline)) {
 	if (oneline == "quit") {
 	    close(sockfd);
 	    break;
 	} else {
+            int command_no = get_command(oneline);
+            switch(command_no){
+		case LOGIN:
+		    cout << "login" <<endl;
+		    string user_name = getUserName(oneline);
+		    break;
+		case LOGOUT:
+		    cout <<"logout"<<endl;
+		    break;
+		case CHAT:
+		    cout <<"chat"<<endl;
+		    break;
+		default:
+		    cout << "please choose login/logout/chat/quit command" <<endl;
+		    break;
+	    }
 	    write(sockfd, oneline.c_str(), oneline.length());
 
             n = read(sockfd, buf, MAXBUFLEN);
@@ -90,8 +112,39 @@ int main(int argc, char* argv[]) {
 	    }
 
 	    buf[n] = '\0';
-	    cout << buf << endl;
+	    cout <<"received form server: "<< buf << endl;
 	}
     }
 }
 
+
+int get_command(string oneline){
+    char command[100]="";
+    for (int i=0;i<oneline.length();i++){
+	if (isalpha(oneline[i])){
+	    command[i]=oneline[i];
+        }else {
+	    break;
+	}
+    }
+
+    int command_size = sizeof(command)/sizeof(char);
+
+    string cmd = convertToString(command, command_size);
+    cout << "CMD: "<< cmd << endl;
+    if (cmd.compare("login"))return LOGIN;
+    else if (cmd.compare("logout")) return LOGOUT;
+    else if (cmd.comapre("chat")) return CHAT;
+    else if (cmd.comapre("quit")) return Q;
+    else return NOTHING;
+}
+
+string convertToString(char* a, int size)
+{
+    int i;
+    string s = "";
+    for (i = 0; i < size; i++) {
+        s = s + a[i];
+    }
+    return s;
+}
