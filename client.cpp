@@ -27,6 +27,7 @@ int main(int argc, char* argv[]) {
     int sockfd, rv, flag;
     ssize_t n;
     char buf[MAXBUFLEN];
+    fd_set rset, orig_set;
 
     struct addrinfo hints, *res, *ressave;
 
@@ -72,48 +73,69 @@ int main(int argc, char* argv[]) {
 		fprintf(stderr, "cannot connect\n");
 		exit(1);
 	}
-	string oneline;
 
-
+// add sockfd and getline in select
+    int maxf = 0;
+    FD_ZERO(&orig_set);
+    FD_SET(STDIN_FILENO, &orig_set);
+    FD_SET(sockfd, &orig_set);
+    if (sockfd > STDIN_FILENO) maxf = sockfd+1;
+    else maxf = STDIN_FILENO + 1;
+    
  // program is blocked on getline().    
-    while (getline(cin, oneline)) {
-	if (oneline == "quit") {
-	    close(sockfd);
-	    break;
-	} else {
-            int command_no = get_command(oneline);
-            switch(command_no){
-		case LOGIN:
-		    cout << "login" <<endl;
-		    string user_name = getUserName(oneline);
-		    break;
-		case LOGOUT:
-		    cout <<"logout"<<endl;
-		    break;
-		case CHAT:
-		    cout <<"chat"<<endl;
-		    break;
-		default:
-		    cout << "please choose login/logout/chat/quit command" <<endl;
-		    break;
-	    }
-	    write(sockfd, oneline.c_str(), oneline.length());
-
-            n = read(sockfd, buf, MAXBUFLEN);
-
-            if (n<= 0) {
-		if (n==0){
-		    cout << "server closed" << endl;
-		}else {
-		    cout <<"something went wrong.." << endl;
-		}
-		close (sockfd);
+    while (1) {
+	rset = orig_set;
+	select(maxf, &rset, NULL,NULL,NULL);
+	if (FD_ISSET(sockfd, &rset)){
+	    if (read(sockfd, buf, 100)==0){
+		printf("server shut\n");
+                close (sockfd);
 		exit(0);
+	    }else {
+	    	buf[n] = '\0';
+	    	cout <<"received form server: "<< buf << endl;
 	    }
-
-	    buf[n] = '\0';
-	    cout <<"received form server: "<< buf << endl;
+	}else if (FD_ISSET(STDIN_FILENO, &rset)){
+	    if (fgets(buf, 100, stdin)== NULL) exit(0);
+	    
+	    string oneline(buf);
+	    
+	    if (oneline == "quit") {
+	        close(sockfd);
+	        break;
+	    } else {
+                int command_no = get_command(oneline);
+                switch(command_no){
+		    case LOGIN:
+		        cout << "login" <<endl;
+		        //string user_name = getUserName(oneline);
+		        break;
+		    case LOGOUT:
+		        cout <<"logout"<<endl;
+		        break;
+		    case CHAT:
+		        cout <<"chat"<<endl;	
+	    		write(sockfd, oneline.c_str(), oneline.length());
+		        break;
+		    default:
+		        cout << "please choose login/logout/chat/quit command" <<endl;
+		        break;
+	        }
+	    }
 	}
+
+           // n = read(sockfd, buf, MAXBUFLEN);
+
+            //if (n<= 0) {
+	//	if (n==0){
+	//	    cout << "server closed" << endl;
+	//	}else {
+	//	    cout <<"something went wrong.." << endl;
+	//	}
+	//	close (sockfd);
+	//	exit(0);
+	  //  }
+
     }
 }
 
@@ -134,8 +156,8 @@ int get_command(string oneline){
     cout << "CMD: "<< cmd << endl;
     if (cmd.compare("login"))return LOGIN;
     else if (cmd.compare("logout")) return LOGOUT;
-    else if (cmd.comapre("chat")) return CHAT;
-    else if (cmd.comapre("quit")) return Q;
+    else if (cmd.compare("chat")) return CHAT;
+    else if (cmd.compare("quit")) return Q;
     else return NOTHING;
 }
 

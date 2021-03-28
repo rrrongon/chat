@@ -71,9 +71,9 @@ int main(int argc, char* argv[]){
 	
         printf("remote machine = %s ", inet_ntoa(cli_addr.sin_addr));
 
-	if ((child_pid == fork())==0){
+//	if ((child_pid == fork())==0){
 
-	    close(serv_sockfd); // close the listen socket in child process
+//	    close(serv_sockfd); // close the listen socket in child process
             printf("remote machine = %s ", inet_ntoa(cli_addr.sin_addr));
             
 	    while ((n = read(cli_sockfd, buf, MAXBUFLEN)) > 0) {
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]){
 	    }
 	    close(cli_sockfd);
 	    exit(0);
-	}
+//	}
 	close(cli_sockfd);
     }
 }
