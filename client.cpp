@@ -92,7 +92,6 @@ int main(int argc, char* argv[]) {
                 close (sockfd);
 		exit(0);
 	    }else {
-	    	//buf[n] = '\0';
 	    	cout <<"received form server: "<< buf << endl;
 	    }
 	}else if (FD_ISSET(STDIN_FILENO, &rset)){
@@ -107,15 +106,11 @@ int main(int argc, char* argv[]) {
                 int command_no = get_command(oneline);
                 switch(command_no){
 		    case LOGIN:
-		        cout << "login" <<endl;
-			write(sockfd, oneline.c_str(), oneline.length());
 		        //string user_name = getUserName(oneline);
 		        break;
 		    case LOGOUT:
-		        cout <<"logout"<<endl;
 		        break;
 		    case CHAT:
-		        cout <<"chat"<<endl;	
 	    		write(sockfd, oneline.c_str(), oneline.length());
 		        break;
 		    default:
@@ -151,15 +146,22 @@ int get_command(string oneline){
 	}
     }
 
-    int command_size = sizeof(command)/sizeof(char);
-
-    string cmd = convertToString(command, command_size);
-    cout << "CMD: "<< cmd << endl;
-    if (cmd.compare("login"))return LOGIN;
-    else if (cmd.compare("logout")) return LOGOUT;
-    else if (cmd.compare("chat")) return CHAT;
-    else if (cmd.compare("quit")) return Q;
-    else return NOTHING;
+    string cmd(command);
+    if (cmd == "login"){
+	return LOGIN;
+    }
+    else if (cmd == "logout") {
+	return LOGOUT;
+    }
+    else if (cmd == "chat"){
+	return CHAT;
+    }
+    else if (cmd == "quit"){
+	return Q;
+    }
+    else{
+	return NOTHING;
+    }
 }
 
 string convertToString(char* a, int size)
