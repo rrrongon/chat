@@ -11,20 +11,25 @@
 #include <string>
 #include <fstream>
 #include <stdio.h>
+#include <errno.h>
 
 using namespace std;
 
+#define MAXCONN 3
 const unsigned MAXBUFLEN = 512;
 
 int getPort(char * argv[]);
 
 int main(int argc, char* argv[]){
-    int serv_sockfd, cli_sockfd;
+    int serv_sockfd, cli_sockfd,c;
     struct sockaddr_in serv_addr, cli_addr;
     socklen_t sock_len;
     pid_t child_pid;
     ssize_t n;
     char buf[MAXBUFLEN];
+    int clients[MAXCONN];
+
+    fd_set allset, rset;
 
     int port = getPort(argv);
     cout << "port = " << port << endl;
@@ -64,32 +69,63 @@ int main(int argc, char* argv[]){
     int errcode;
     char addrstr[100];
     void *ptr;
+
+
+    //clear clients array buffer
+    for (c=0;c < MAXCONN; c++)
+	clients[c]= -1;
     
-    for (; ;){
-	sock_len = sizeof(cli_addr);
-	cli_sockfd = accept(serv_sockfd,(struct sockaddr *)&cli_addr, &sock_len);
-	
-        printf("remote machine = %s ", inet_ntoa(cli_addr.sin_addr));
-
-//	if ((child_pid == fork())==0){
-
-//	    close(serv_sockfd); // close the listen socket in child process
+    FD_ZERO(&allset);
+    FD_SET(serv_sockfd, &allset);
+    int maxfd = serv_sockfd;
+    
+    while(1){
+	rset = allset;
+	select(maxfd+1, &rset, NULL,NULL,NULL);
+	if (FD_ISSET(serv_sockfd, &rset)){
+	    /* if someone tries to connect */
+	    sock_len = sizeof(cli_addr);
+	    if ((cli_sockfd = accept(serv_sockfd,(struct sockaddr *)&cli_addr, &sock_len))<0) {
+		if (errno == EINTR)
+		    continue;
+		else {
+		    perror(":accept error");
+		    exit(1);
+		}
+	    }
+	    
             printf("remote machine = %s ", inet_ntoa(cli_addr.sin_addr));
-            
-	    while ((n = read(cli_sockfd, buf, MAXBUFLEN)) > 0) {
-		buf[n] = '\0';
-		cout << buf << endl;
-		write(cli_sockfd, buf, strlen(buf));
+	    
+	    for (c=0; c< MAXCONN; c++){
+		if (clients[c]<0){
+		    clients[c]=cli_sockfd;
+		    FD_SET(clients[c], &allset);
+		    break;
+		}
 	    }
-            if (n == 0) {
-		cout << "client closed" << endl;
-	    } else {
-		cout << "something wrong" << endl;
+
+	    if (c == MAXCONN){
+		printf("too many connections.\n");
+		close(cli_sockfd);
 	    }
-	    close(cli_sockfd);
-	    exit(0);
-//	}
-	close(cli_sockfd);
+
+	    if (cli_sockfd > maxfd) maxfd = cli_sockfd;
+	}
+	
+	for (c=0; c<MAXCONN; c++){
+	    if (clients[c]<0) continue;
+	    if (FD_ISSET(clients[c], &rset)){
+		n = read(clients[c], buf, 100);
+		if (n==0){
+		    close(clients[c]);
+		    FD_CLR(clients[c], &allset);
+		    clients[c] = -1;
+		}else {
+		    cout << "received from client: "<< c << "\n msg: " << buf<<endl;
+		    write(clients[c], buf, n);
+		}
+	    }
+	}
     }
 }
 

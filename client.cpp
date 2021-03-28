@@ -87,12 +87,12 @@ int main(int argc, char* argv[]) {
 	rset = orig_set;
 	select(maxf, &rset, NULL,NULL,NULL);
 	if (FD_ISSET(sockfd, &rset)){
-	    if (read(sockfd, buf, 100)==0){
+	    if (n=read(sockfd, buf, 100)==0){
 		printf("server shut\n");
                 close (sockfd);
 		exit(0);
 	    }else {
-	    	buf[n] = '\0';
+	    	//buf[n] = '\0';
 	    	cout <<"received form server: "<< buf << endl;
 	    }
 	}else if (FD_ISSET(STDIN_FILENO, &rset)){
@@ -108,6 +108,7 @@ int main(int argc, char* argv[]) {
                 switch(command_no){
 		    case LOGIN:
 		        cout << "login" <<endl;
+			write(sockfd, oneline.c_str(), oneline.length());
 		        //string user_name = getUserName(oneline);
 		        break;
 		    case LOGOUT:
