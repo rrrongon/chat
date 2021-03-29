@@ -12,6 +12,8 @@
 #include <fstream>
 #include <stdio.h>
 #include <errno.h>
+#include <pthread.h>
+
 
 using namespace std;
 
@@ -20,8 +22,33 @@ const unsigned MAXBUFLEN = 512;
 
 int getPort(char * argv[]);
 
+
+void *client_handler_thread(void *arg){
+    int sockfd;
+    ssize_t n;
+    char buf[MAXBUFLEN];
+    sockfd = *((int *)arg);
+    free(arg);
+
+    pthread_detach(pthread_self());
+
+    while ((n=read(sockfd, buf, MAXBUFLEN))>0){
+	buf[n]='\0';
+	cout << "client wrote: " << buf << endl;
+    }   
+
+    if (n==0){
+	cout << "client close" << endl;
+    }else {
+	cout << "something wrong" << endl;
+    }
+
+    close(sockfd);
+    return (NULL);
+}
+
 int main(int argc, char* argv[]){
-    int serv_sockfd, cli_sockfd,c;
+    int serv_sockfd, cli_sockfd,c, *sock_ptr;
     struct sockaddr_in serv_addr, cli_addr;
     socklen_t sock_len;
     pid_t child_pid;
@@ -30,6 +57,7 @@ int main(int argc, char* argv[]){
     int clients[MAXCONN];
 
     fd_set allset, rset;
+    pthread_t tid;
 
     int port = getPort(argv);
     cout << "port = " << port << endl;
@@ -94,8 +122,9 @@ int main(int argc, char* argv[]){
 		}
 	    }
 	    
-            printf("remote machine = %s ", inet_ntoa(cli_addr.sin_addr));
-	    
+            printf("remote machine = %s \n", inet_ntoa(cli_addr.sin_addr));
+	    printf("remote machine port = %d\n", ntohs(cli_addr.sin_port));
+ 
 	    for (c=0; c< MAXCONN; c++){
 		if (clients[c]<0){
 		    clients[c]=cli_sockfd;
@@ -111,8 +140,13 @@ int main(int argc, char* argv[]){
 
 	    if (cli_sockfd > maxfd) maxfd = cli_sockfd;
 	}
+
+	sock_ptr = (int *) malloc(sizeof(int));
+	*sock_ptr = cli_sockfd;
+
+	pthread_create(&tid, NULL, &client_handler_thread, (void *)sock_ptr);
 	
-	for (c=0; c<MAXCONN; c++){
+	/*for (c=0; c<MAXCONN; c++){
 	    if (clients[c]<0) continue;
 	    if (FD_ISSET(clients[c], &rset)){
 		n = read(clients[c], buf, 100);
@@ -125,7 +159,7 @@ int main(int argc, char* argv[]){
 		    write(clients[c], buf, n);
 		}
 	    }
-	}
+	}*/
     }
 }
 
