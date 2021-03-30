@@ -27,9 +27,15 @@ const int CHAT=3;
 const int NOTHING=4;
 const int Q=5;
 
+const int  EXISTING_USER = 1;
+const int NEW_USER = 2;
+
 int getPort(char * argv[]);
 int get_command(string);
 string parse_login(string);
+
+int add_user(string, int);
+void write_to_clients(int sockfds[], string buf_msg);
 
 map <string, int> username_socketfd;
 
@@ -47,34 +53,27 @@ void *client_handler_thread(void *arg){
 	string client_input(buf);
 	int command_type = get_command(client_input);
 	string username;
-	bool match = false;
+	int user_type=0;
 
-	map<std::string, int>::iterator it = username_socketfd.begin();
-	
 	switch (command_type){
 	    case LOGIN:
 		username = parse_login(client_input);
 
 		pthread_mutex_lock(&accept_lock);
-		
-		while(it != username_socketfd.end()){
-		    cout << it->first << "::" << it->second << endl;
-		    if (it->first == username){
-		        match = true;
-			break;
-		    }
-		    it++;
-		}
-		if (match){
-		    cout << "username already taken"<< endl;
-		    match = false;
-		}else{
-		    cout << "inserting new user name " << username <<  endl;
-		    username_socketfd[username] = sockfd;
-		}
-
+		user_type = add_user(username, sockfd);
 		pthread_mutex_unlock(&accept_lock);	
 
+		if (user_type == EXISTING_USER){
+	 	    cout << "existing user" << endl;
+		    string x = "user already exisits";
+		    int socks[1] = {sockfd};
+		    write_to_clients(socks, x);
+		    close(sockfd);
+		    return(NULL);
+		}
+		else if (user_type==NEW_USER){
+		    cout << "New user" << endl;
+		}
 		break;
 
 	    case LOGOUT:
@@ -278,4 +277,36 @@ string parse_login(string message){
 	    name = name + message[i];
     }
     return name;
+}
+
+int add_user(string username, int sockfd){ 
+    
+    bool match = false;
+    map<std::string, int>::iterator it = username_socketfd.begin();
+	
+    while(it != username_socketfd.end()){
+        cout << it->first << "::" << it->second << endl;
+	if (it->first == username){
+	    match = true;
+	    break;
+	}
+	it++;
+    }
+    if (match){
+        return EXISTING_USER;	
+    }else{
+	username_socketfd[username] = sockfd;
+	return NEW_USER;
+    }
+}
+
+void write_to_clients(int sockfds[], string buf_msg){
+    cout << "wtc: "<< buf_msg<<endl;
+    int n = buf_msg.length();
+    char buf[n+1];
+    strcpy(buf, buf_msg.c_str());
+    int len = sizeof(sockfds)/ sizeof(sockfds[0]);
+    for(int i=0;i<len;i++){
+	write(sockfds[i], buf, n+1);
+    }
 }
