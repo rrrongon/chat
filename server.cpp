@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iterator>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <strings.h>
@@ -13,15 +14,24 @@
 #include <stdio.h>
 #include <errno.h>
 #include <pthread.h>
-
+#include <map>
 
 using namespace std;
+pthread_mutex_t accept_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define MAXCONN 3
 const unsigned MAXBUFLEN = 512;
+const int LOGIN=1;
+const int LOGOUT=2;
+const int CHAT=3;
+const int NOTHING=4;
+const int Q=5;
 
 int getPort(char * argv[]);
+int get_command(string);
+string parse_login(string);
 
+map <string, int> username_socketfd;
 
 void *client_handler_thread(void *arg){
     int sockfd;
@@ -34,7 +44,51 @@ void *client_handler_thread(void *arg){
 
     while ((n=read(sockfd, buf, MAXBUFLEN))>0){
 	buf[n]='\0';
-	cout << "client wrote: " << buf << endl;
+	string client_input(buf);
+	int command_type = get_command(client_input);
+	string username;
+	bool match = false;
+
+	map<std::string, int>::iterator it = username_socketfd.begin();
+	
+	switch (command_type){
+	    case LOGIN:
+		username = parse_login(client_input);
+
+		pthread_mutex_lock(&accept_lock);
+		
+		while(it != username_socketfd.end()){
+		    cout << it->first << "::" << it->second << endl;
+		    if (it->first == username){
+		        match = true;
+			break;
+		    }
+		    it++;
+		}
+		if (match){
+		    cout << "username already taken"<< endl;
+		    match = false;
+		}else{
+		    cout << "inserting new user name " << username <<  endl;
+		    username_socketfd[username] = sockfd;
+		}
+
+		pthread_mutex_unlock(&accept_lock);	
+
+		break;
+
+	    case LOGOUT:
+		cout <<"client wants to logout:" << endl;
+		break;
+
+	    case CHAT:
+		cout << "client wants to chat" << endl;
+		break;
+
+	    default:
+		cout << "None of these valid command" << endl;
+		break;
+	}	
     }   
 
     if (n==0){
@@ -58,6 +112,7 @@ int main(int argc, char* argv[]){
 
     fd_set allset, rset;
     pthread_t tid;
+
 
     int port = getPort(argv);
     cout << "port = " << port << endl;
@@ -179,4 +234,48 @@ int getPort(char * argv[])
     }
     printf("Port %d\n", port);
     return port;
+}
+
+int get_command(string line){
+    char command[100]="";
+    for (int i=0;i<line.length();i++){
+        if (isalpha(line[i])){
+            command[i]=line[i];
+        }else {
+            break;
+        }
+    }
+
+    string cmd(command);
+    if (cmd == "login"){
+        return LOGIN;
+    }
+    else if (cmd == "logout") {
+        return LOGOUT;
+    }
+    else if (cmd == "chat"){
+        return CHAT;
+    }
+    else if (cmd == "quit"){
+        return Q;
+    }
+    else{
+        return NOTHING;
+    }
+}
+
+string parse_login(string message){
+    int i=0, pos_counter=0;
+    string name="";
+
+    for (auto x: message){
+	if(x==' ') break;
+	else pos_counter++;
+    }
+
+    for (i=++pos_counter;i<message.length();i++){
+	if (isalpha(message[i]))
+	    name = name + message[i];
+    }
+    return name;
 }
