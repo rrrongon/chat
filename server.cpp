@@ -27,13 +27,16 @@ const int CHAT=3;
 const int NOTHING=4;
 const int Q=5;
 
+const int SINGLE_USER = 1;
+const int BRD_CAST = 2;
+
 const int  EXISTING_USER = 1;
 const int NEW_USER = 2;
 
 int getPort(char * argv[]);
 int get_command(string);
 string parse_login(string);
-
+int isBroadcast(string msg);
 int add_user(string, int);
 void write_to_clients(int sockfds[], string buf_msg);
 
@@ -47,32 +50,37 @@ void *client_handler_thread(void *arg){
     free(arg);
 
     pthread_detach(pthread_self());
-
+    bool already_login=false;
+    string username;
+    int user_type=0;
     while ((n=read(sockfd, buf, MAXBUFLEN))>0){
 	buf[n]='\0';
 	string client_input(buf);
 	int command_type = get_command(client_input);
-	string username;
-	int user_type=0;
 
+	int chat_type;
 	switch (command_type){
 	    case LOGIN:
-		username = parse_login(client_input);
+		if (!already_login){
+		    username = parse_login(client_input);
+		    cout << "USER: "<< username<<endl;
+		    pthread_mutex_lock(&accept_lock);
+		    user_type = add_user(username, sockfd);
+		    pthread_mutex_unlock(&accept_lock);	
 
-		pthread_mutex_lock(&accept_lock);
-		user_type = add_user(username, sockfd);
-		pthread_mutex_unlock(&accept_lock);	
-
-		if (user_type == EXISTING_USER){
-	 	    cout << "existing user" << endl;
-		    string x = "user already exisits";
-		    int socks[1] = {sockfd};
-		    write_to_clients(socks, x);
-		    close(sockfd);
-		    return(NULL);
-		}
-		else if (user_type==NEW_USER){
-		    cout << "New user" << endl;
+		    if (user_type == EXISTING_USER){
+	 	        cout << "existing user" << endl;
+		        string x = "user already exisits";
+		        int socks[1] = {sockfd};
+		        write_to_clients(socks, x);
+		        close(sockfd);
+		        cout << "Connection closed"<<endl;
+		        return(NULL);
+		    }
+		    else if (user_type==NEW_USER){
+		        cout << "New user" << endl;
+		        already_login = true;
+		    }
 		}
 		break;
 
@@ -81,7 +89,16 @@ void *client_handler_thread(void *arg){
 		break;
 
 	    case CHAT:
-		cout << "client wants to chat" << endl;
+		cout << username << ": wants to chat" << endl;
+		chat_type = isBroadcast(client_input);
+		switch(chat_type){
+		    case SINGLE_USER:
+			cout << "single user in thread"<<endl;
+			break;
+		    case BRD_CAST:
+			cout <<"brd cast in thread"<<endl;
+			break;
+		}
 		break;
 
 	    default:
@@ -178,21 +195,7 @@ int main(int argc, char* argv[]){
 	    
             printf("remote machine = %s \n", inet_ntoa(cli_addr.sin_addr));
 	    printf("remote machine port = %d\n", ntohs(cli_addr.sin_port));
- 
-	    for (c=0; c< MAXCONN; c++){
-		if (clients[c]<0){
-		    clients[c]=cli_sockfd;
-		    FD_SET(clients[c], &allset);
-		    break;
-		}
-	    }
-
-	    if (c == MAXCONN){
-		printf("too many connections.\n");
-		close(cli_sockfd);
-	    }
-
-	    if (cli_sockfd > maxfd) maxfd = cli_sockfd;
+ 		
 	}
 
 	sock_ptr = (int *) malloc(sizeof(int));
@@ -200,20 +203,6 @@ int main(int argc, char* argv[]){
 
 	pthread_create(&tid, NULL, &client_handler_thread, (void *)sock_ptr);
 	
-	/*for (c=0; c<MAXCONN; c++){
-	    if (clients[c]<0) continue;
-	    if (FD_ISSET(clients[c], &rset)){
-		n = read(clients[c], buf, 100);
-		if (n==0){
-		    close(clients[c]);
-		    FD_CLR(clients[c], &allset);
-		    clients[c] = -1;
-		}else {
-		    cout << "received from client: "<< c << "\n msg: " << buf<<endl;
-		    write(clients[c], buf, n);
-		}
-	    }
-	}*/
     }
 }
 
@@ -301,12 +290,26 @@ int add_user(string username, int sockfd){
 }
 
 void write_to_clients(int sockfds[], string buf_msg){
-    cout << "wtc: "<< buf_msg<<endl;
     int n = buf_msg.length();
     char buf[n+1];
     strcpy(buf, buf_msg.c_str());
     int len = sizeof(sockfds)/ sizeof(sockfds[0]);
     for(int i=0;i<len;i++){
 	write(sockfds[i], buf, n+1);
+    }
+}
+
+int isBroadcast(string msg){
+    int counter=0;
+    int type = 1;
+    for (auto x: msg){
+	if (x==' '){ counter++;  break;}
+	counter++;
+    }
+
+    if (msg[counter]=='@'){
+	return SINGLE_USER;
+    }else{
+	return BRD_CAST;
     }
 }

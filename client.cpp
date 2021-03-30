@@ -107,6 +107,7 @@ int main(int argc, char* argv[]) {
                 switch(command_no){
 		    case LOGIN:
 		        //string user_name = getUserName(oneline);
+		        write(sockfd, oneline.c_str(), oneline.length());
 		        break;
 		    case LOGOUT:
 		        break;
