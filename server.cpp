@@ -38,7 +38,10 @@ int get_command(string);
 string parse_login(string);
 int isBroadcast(string msg);
 int add_user(string, int);
-void write_to_clients(int sockfds[], string buf_msg);
+void write_to_clients(int* sockfds, string buf_msg);
+string getTargetUserName (string msg);
+string getMsg(string msg, int chat_type);
+int* getUserSocketfd(map <string, int>* username_socketfd, string username, int chat_type);
 
 map <string, int> username_socketfd;
 
@@ -52,13 +55,18 @@ void *client_handler_thread(void *arg){
     pthread_detach(pthread_self());
     bool already_login=false;
     string username;
+    string target_user;
     int user_type=0;
+    int chat_type = -1;
     while ((n=read(sockfd, buf, MAXBUFLEN))>0){
 	buf[n]='\0';
 	string client_input(buf);
 	int command_type = get_command(client_input);
+        
+        int *sockfds;
+	string chatMsg;
 
-	int chat_type;
+	chat_type=-1;
 	switch (command_type){
 	    case LOGIN:
 		if (!already_login){
@@ -91,14 +99,24 @@ void *client_handler_thread(void *arg){
 	    case CHAT:
 		cout << username << ": wants to chat" << endl;
 		chat_type = isBroadcast(client_input);
-		switch(chat_type){
-		    case SINGLE_USER:
-			cout << "single user in thread"<<endl;
-			break;
-		    case BRD_CAST:
+		cout << "ch_type------------->" << chat_type<<endl;
+		
+		    if (chat_type== SINGLE_USER){
+			cout << "------------------"<< endl;
+			target_user = getTargetUserName(client_input);
+			cout << username << " wants to chat with " << target_user << endl;
+			sockfds = getUserSocketfd(&username_socketfd, target_user, SINGLE_USER);
+			cout << "got sock fds.." << endl;
+			chatMsg = getMsg(client_input, SINGLE_USER);
+			cout << "need to send: " << chatMsg << "to " << target_user << endl;
+			write_to_clients(sockfds,chatMsg);
+		    }else{
+		    
 			cout <<"brd cast in thread"<<endl;
 			break;
-		}
+		    }
+		chat_type = -1;
+
 		break;
 
 	    default:
@@ -289,27 +307,114 @@ int add_user(string username, int sockfd){
     }
 }
 
-void write_to_clients(int sockfds[], string buf_msg){
+void write_to_clients(int * sockfds, string buf_msg){
     int n = buf_msg.length();
     char buf[n+1];
     strcpy(buf, buf_msg.c_str());
-    int len = sizeof(sockfds)/ sizeof(sockfds[0]);
-    for(int i=0;i<len;i++){
-	write(sockfds[i], buf, n+1);
+    
+    for(int i=0;i<100;i++){
+	if (*(sockfds+i)>0){
+	    int x = *(sockfds+i);
+	    write(x, buf, n+1);
+	}
     }
 }
 
 int isBroadcast(string msg){
     int counter=0;
     int type = 1;
+    int t = -1;
     for (auto x: msg){
 	if (x==' '){ counter++;  break;}
 	counter++;
     }
 
     if (msg[counter]=='@'){
-	return SINGLE_USER;
+	t = SINGLE_USER;
     }else{
-	return BRD_CAST;
+	t =  BRD_CAST;
     }
+
+    cout << " broadcast type: "<< t << endl;
+    return t;
+}
+
+string getTargetUserName(string msg){
+    int counter=0;
+    int type = 1;
+    string targetUser="";
+
+    for (auto x: msg){
+	if (x==' '){ counter++;  break;}
+	counter++;
+    }
+
+    if (msg[counter]=='@'){
+	counter++;
+	for (int j=counter;j<msg.length();j++){
+	    if(!isalpha(msg[j])) break;
+	    else{
+		targetUser = targetUser + msg[j];
+	    }
+	}
+	return targetUser;
+    }
+
+}
+
+int* getUserSocketfd(map <string, int>* username_socketfd, string username, int chat_type){
+    static int sockfds[100];
+
+    for (int i=0;i<100;i++){ sockfds[i]=-1;}
+ 
+    if(chat_type==SINGLE_USER){
+	std::map<std::string, int>::iterator it = username_socketfd->begin();
+        int counter = 0;
+
+	while (it != username_socketfd->end()){
+	    cout << "map data: " << it-> first << "  " << it-> second<< endl;
+            if(it->first==username) {
+                sockfds[counter] = it->second;
+                counter++;
+            }
+	    it++;
+        }
+	return sockfds;
+    }else{
+	std::map<std::string, int>::iterator it = username_socketfd->begin();
+	int counter = 0;
+	while (it != username_socketfd->end()){
+            sockfds[counter]=it->second;
+	    counter++;
+        }
+	it++;
+	return sockfds;
+    }
+}
+
+string getMsg(string msg, int chat_type){
+    int space_count = 0;
+    string chatMsg="";
+
+    if (chat_type==SINGLE_USER){
+	space_count = 2;
+    }else if (chat_type==BRD_CAST){
+	space_count = 1;
+    }
+
+    int counter=0;
+    for (auto x: msg){
+	if (x==' '){
+	    space_count--;
+	}if (space_count==0){
+	    break;
+	}
+	counter ++;
+    }
+
+    for (int j=counter;j<msg.length();j++){
+	chatMsg = chatMsg+msg[j];
+    }
+
+    return chatMsg;
 }
