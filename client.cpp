@@ -22,6 +22,9 @@ const int Q=5;
 
 int get_command(string);
 string convertToString(char* , int );
+void sig_usr(int signo);
+
+int sck_dsc=-100;
 
 int main(int argc, char* argv[]) {
     int sockfd, rv, flag;
@@ -75,6 +78,7 @@ int main(int argc, char* argv[]) {
 	}
 
 // add sockfd and getline in select
+    sck_dsc = sockfd;
     int maxf = 0;
     FD_ZERO(&orig_set);
     FD_SET(STDIN_FILENO, &orig_set);
@@ -82,6 +86,10 @@ int main(int argc, char* argv[]) {
     if (sockfd > STDIN_FILENO) maxf = sockfd+1;
     else maxf = STDIN_FILENO + 1;
     
+    if (signal(SIGINT, sig_usr) == SIG_ERR){
+        cout << "sigint invoked"<<endl;
+    }
+
  // program is blocked on getline().    
     while (1) {
 	rset = orig_set;
@@ -161,4 +169,16 @@ string convertToString(char* a, int size)
         s = s + a[i];
     }
     return s;
+}
+
+void sig_usr(int signo){
+    if(signo == SIGINT){
+        string l = "logout";
+	if (sck_dsc>0){
+            write(sck_dsc, l.c_str(),l.length());
+            close(sck_dsc);
+        }
+	cout << "\nSIGINT received. Logging out if logged in and shutting."<< endl;
+	exit(1);
+    }
 }

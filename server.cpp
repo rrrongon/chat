@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <map>
+#include <signal.h>
 
 using namespace std;
 pthread_mutex_t accept_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -43,6 +44,8 @@ string getTargetUserName (string msg);
 string getMsg(string msg, int chat_type);
 int* getUserSocketfd(map <string, int>* username_socketfd, string username, int chat_type);
 void removeUser(map <string, int>* username_socketfd, string);
+void sig_usr(int signo);
+
 
 map <string, int> username_socketfd;
 
@@ -216,6 +219,11 @@ int main(int argc, char* argv[]){
     FD_SET(serv_sockfd, &allset);
     int maxfd = serv_sockfd;
     
+
+    if (signal(SIGINT, sig_usr) == SIG_ERR){
+	cout << "sigint invoked"<<endl;
+    }
+
     while(1){
 	rset = allset;
 	select(maxfd+1, &rset, NULL,NULL,NULL);
@@ -441,4 +449,23 @@ string getMsg(string msg, int chat_type){
 
 void removeUser(map <string, int>* username_socketfd, string username){
     username_socketfd->erase(username); 
+}
+
+void sig_usr(int signo) 
+{
+    if (signo == SIGINT){
+	std::map<std::string, int>::iterator it = username_socketfd.begin();
+        int counter = 0;
+        while (it != username_socketfd.end()){
+            int sockdesc = it->second;
+            string x = "server is interrupted by SIGNINT. Server is closing";
+            int len = x.length();
+	    write(sockdesc, x.c_str(),len);
+	    close(sockdesc);
+            it++;
+        }
+	
+    }
+    printf("\nreceived SIGINT. Server is closing. All socket closed.\n");
+    exit(1);
 }
