@@ -90,37 +90,34 @@ void *client_handler_thread(void *arg){
 		        already_login = true;
 		    }
 		}
-		break;
 
+		break;
 	    case LOGOUT:
 		cout <<"client wants to logout:" << endl;
 		break;
-
 	    case CHAT:
-		cout << username << ": wants to chat" << endl;
 		chat_type = isBroadcast(client_input);
-		cout << "ch_type------------->" << chat_type<<endl;
 		
 		    if (chat_type== SINGLE_USER){
-			cout << "------------------"<< endl;
 			target_user = getTargetUserName(client_input);
-			cout << username << " wants to chat with " << target_user << endl;
+			cout << username << ": wants to chat with ->" << target_user << endl;
 			sockfds = getUserSocketfd(&username_socketfd, target_user, SINGLE_USER);
-			cout << "got sock fds.." << endl;
 			chatMsg = getMsg(client_input, SINGLE_USER);
-			cout << "need to send: " << chatMsg << "to " << target_user << endl;
+			chatMsg = username+ " >>" + chatMsg;
 			write_to_clients(sockfds,chatMsg);
 		    }else{
 		    
 			cout <<"brd cast in thread"<<endl;
-			break;
+			sockfds = getUserSocketfd(&username_socketfd, username , BRD_CAST);
+			chatMsg = getMsg(client_input, BRD_CAST);
+			chatMsg = username + ">>" +chatMsg;
+			write_to_clients(sockfds, chatMsg);
+			
 		    }
-		chat_type = -1;
-
 		break;
-
 	    default:
 		cout << "None of these valid command" << endl;
+		chat_type = -1;
 		break;
 	}	
     }   
@@ -372,7 +369,6 @@ int* getUserSocketfd(map <string, int>* username_socketfd, string username, int 
         int counter = 0;
 
 	while (it != username_socketfd->end()){
-	    cout << "map data: " << it-> first << "  " << it-> second<< endl;
             if(it->first==username) {
                 sockfds[counter] = it->second;
                 counter++;
@@ -384,10 +380,13 @@ int* getUserSocketfd(map <string, int>* username_socketfd, string username, int 
 	std::map<std::string, int>::iterator it = username_socketfd->begin();
 	int counter = 0;
 	while (it != username_socketfd->end()){
-            sockfds[counter]=it->second;
-	    counter++;
+	    if (it->first!=username){
+                sockfds[counter]=it->second;
+	        counter++;
+	    }
+	    it++;
         }
-	it++;
+
 	return sockfds;
     }
 }
