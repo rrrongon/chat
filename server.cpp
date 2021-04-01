@@ -42,6 +42,7 @@ void write_to_clients(int* sockfds, string buf_msg);
 string getTargetUserName (string msg);
 string getMsg(string msg, int chat_type);
 int* getUserSocketfd(map <string, int>* username_socketfd, string username, int chat_type);
+void removeUser(map <string, int>* username_socketfd, string);
 
 map <string, int> username_socketfd;
 
@@ -58,6 +59,10 @@ void *client_handler_thread(void *arg){
     string target_user;
     int user_type=0;
     int chat_type = -1;
+
+    string l;
+    int len;
+
     while ((n=read(sockfd, buf, MAXBUFLEN))>0){
 	buf[n]='\0';
 	string client_input(buf);
@@ -93,27 +98,39 @@ void *client_handler_thread(void *arg){
 
 		break;
 	    case LOGOUT:
-		cout <<"client wants to logout:" << endl;
+		cout <<"USER: "<< username<< " wants to logout" << endl;
+		pthread_mutex_lock(&accept_lock);
+		removeUser(&username_socketfd,username);
+		pthread_mutex_unlock(&accept_lock);
+		l = "you have been logged out";
+		len = l.length();
+		write(sockfd, l.c_str(),len+1);
+		already_login = false;
 		break;
 	    case CHAT:
-		chat_type = isBroadcast(client_input);
+		if (already_login){
+		    chat_type = isBroadcast(client_input);
 		
-		    if (chat_type== SINGLE_USER){
-			target_user = getTargetUserName(client_input);
-			cout << username << ": wants to chat with ->" << target_user << endl;
-			sockfds = getUserSocketfd(&username_socketfd, target_user, SINGLE_USER);
-			chatMsg = getMsg(client_input, SINGLE_USER);
-			chatMsg = username+ " >>" + chatMsg;
-			write_to_clients(sockfds,chatMsg);
-		    }else{
+		        if (chat_type== SINGLE_USER){
+			    target_user = getTargetUserName(client_input);
+			    cout << username << ": wants to chat with ->" << target_user << endl;
+			    sockfds = getUserSocketfd(&username_socketfd, target_user, SINGLE_USER);
+			    chatMsg = getMsg(client_input, SINGLE_USER);
+			    chatMsg = username+ " >>" + chatMsg;
+			    write_to_clients(sockfds,chatMsg);
+		        }else{
 		    
-			cout <<"brd cast in thread"<<endl;
-			sockfds = getUserSocketfd(&username_socketfd, username , BRD_CAST);
-			chatMsg = getMsg(client_input, BRD_CAST);
-			chatMsg = username + ">>" +chatMsg;
-			write_to_clients(sockfds, chatMsg);
-			
-		    }
+			    cout <<username << " wants to broadcast message"<<endl;
+			    sockfds = getUserSocketfd(&username_socketfd, username , BRD_CAST);
+			    chatMsg = getMsg(client_input, BRD_CAST);
+			    chatMsg = username + ">>" +chatMsg;
+			    write_to_clients(sockfds, chatMsg);
+		        }
+		}else{
+		    l = "please login first to chat";
+		    len = l.length();
+		    write(sockfd, l.c_str(), len);
+		}
 		break;
 	    default:
 		cout << "None of these valid command" << endl;
@@ -124,11 +141,17 @@ void *client_handler_thread(void *arg){
 
     if (n==0){
 	cout << "client close" << endl;
+        
     }else {
 	cout << "something wrong" << endl;
     }
 
+    pthread_mutex_lock(&accept_lock);
+    removeUser(&username_socketfd, username);
+    pthread_mutex_unlock(&accept_lock);
+    
     close(sockfd);
+    pthread_exit(NULL);
     return (NULL);
 }
 
@@ -289,7 +312,6 @@ int add_user(string username, int sockfd){
     map<std::string, int>::iterator it = username_socketfd.begin();
 	
     while(it != username_socketfd.end()){
-        cout << it->first << "::" << it->second << endl;
 	if (it->first == username){
 	    match = true;
 	    break;
@@ -308,11 +330,11 @@ void write_to_clients(int * sockfds, string buf_msg){
     int n = buf_msg.length();
     char buf[n+1];
     strcpy(buf, buf_msg.c_str());
-    
+    buf[n] = '\0'; 
     for(int i=0;i<100;i++){
 	if (*(sockfds+i)>0){
 	    int x = *(sockfds+i);
-	    write(x, buf, n+1);
+	    write(x, buf,n+1);
 	}
     }
 }
@@ -332,7 +354,6 @@ int isBroadcast(string msg){
 	t =  BRD_CAST;
     }
 
-    cout << " broadcast type: "<< t << endl;
     return t;
 }
 
@@ -416,4 +437,8 @@ string getMsg(string msg, int chat_type){
     }
 
     return chatMsg;
+}
+
+void removeUser(map <string, int>* username_socketfd, string username){
+    username_socketfd->erase(username); 
 }

@@ -87,22 +87,17 @@ int main(int argc, char* argv[]) {
 	rset = orig_set;
 	select(maxf, &rset, NULL,NULL,NULL);
 	if (FD_ISSET(sockfd, &rset)){
-	    if (n=read(sockfd, buf, 100)==0){
+	    if (n=read(sockfd, buf, MAXBUFLEN)==0){
 		printf("server shut\n");
                 close (sockfd);
 		exit(0);
 	    }else {
-	    	cout <<"received form server: "<< buf << endl;
+	    	cout <<"->"<< buf << endl;
 	    }
 	}else if (FD_ISSET(STDIN_FILENO, &rset)){
-	    if (fgets(buf, 100, stdin)== NULL) exit(0);
-	    
+	    if (fgets(buf, MAXBUFLEN, stdin)== NULL) exit(0);
+	    buf[strlen(buf)]='\0';    
 	    string oneline(buf);
-	    
-	    if (oneline == "quit") {
-	        close(sockfd);
-	        break;
-	    } else {
                 int command_no = get_command(oneline);
                 switch(command_no){
 		    case LOGIN:
@@ -110,29 +105,22 @@ int main(int argc, char* argv[]) {
 		        write(sockfd, oneline.c_str(), oneline.length());
 		        break;
 		    case LOGOUT:
+			write(sockfd, oneline.c_str(), oneline.length());
 		        break;
 		    case CHAT:
 	    		write(sockfd, oneline.c_str(), oneline.length());
 		        break;
+		    case Q:
+			close(sockfd);
+			cout << "socket has been closed"<< endl;
+			cout << "****************** Thank you for using FUN CHAT***************** " << endl;
+			exit(0);
 		    default:
 		        cout << "please choose login/logout/chat/quit command" <<endl;
 		        break;
 	        }
-	    }
+	   
 	}
-
-           // n = read(sockfd, buf, MAXBUFLEN);
-
-            //if (n<= 0) {
-	//	if (n==0){
-	//	    cout << "server closed" << endl;
-	//	}else {
-	//	    cout <<"something went wrong.." << endl;
-	//	}
-	//	close (sockfd);
-	//	exit(0);
-	  //  }
-
     }
 }
 
@@ -157,7 +145,7 @@ int get_command(string oneline){
     else if (cmd == "chat"){
 	return CHAT;
     }
-    else if (cmd == "quit"){
+    else if (cmd == "exit"){
 	return Q;
     }
     else{
